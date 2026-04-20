@@ -45,11 +45,6 @@ export const formatRiskScore = (score) => {
   return RISK_LEVELS.INFO;
 };
 
-export const formatRuleDiff = (diff) => {
-  if (!diff) return "No rule differences";
-  return typeof diff === "string" ? diff : JSON.stringify(diff, null, 2);
-};
-
 // Form field schemas for each use case
 export const FORM_SCHEMAS = {
   1: {

@@ -84,35 +84,27 @@ export class AIAnalyzer {
 
   _parseThinkingSteps(content) {
     const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch (e) {
-        console.warn("Could not parse JSON:", e.message);
-      }
+    if (!jsonMatch) {
+      throw new Error(
+        "HF API did not return valid JSON array for thinking steps",
+      );
     }
-
-    // Fallback: split into steps
-    return content
-      .split("\n")
-      .filter((s) => s.trim().length > 0)
-      .slice(0, 6);
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      throw new Error(`Failed to parse thinking steps JSON: ${e.message}`);
+    }
   }
 
   _parseAnalysis(content) {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch (e) {
-        console.warn("Could not parse JSON:", e.message);
-      }
+    if (!jsonMatch) {
+      throw new Error("HF API did not return valid JSON object for analysis");
     }
-
-    return {
-      summary: content || "Analysis generated",
-      mainConcern: "See summary for details",
-      recommendation: "Review and implement recommended controls",
-    };
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      throw new Error(`Failed to parse analysis JSON: ${e.message}`);
+    }
   }
 }

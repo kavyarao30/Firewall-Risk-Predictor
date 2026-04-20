@@ -1,6 +1,6 @@
 import { useSelector } from 'react-redux';
 import { ExclamationCircleOutlined, RobotOutlined, BulbOutlined, ArrowLeftOutlined } from '@ant-design/icons';
-import { RISK_LEVELS, formatRiskScore, formatRuleDiff } from '../util/constants.js';
+import { RISK_LEVELS, formatRiskScore } from '../util/constants.js';
 import { useState } from 'react';
 
 export default function Results({ caseId, onDone }) {

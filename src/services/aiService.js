@@ -32,6 +32,12 @@ export async function generateAIAnalysis(
   parsedNLPResult,
 ) {
   try {
+    // Check if backend AI service is available before analysis
+    const backendAvailable = await isBackendAvailable();
+    if (!backendAvailable) {
+      throw new Error("AI backend service is not available. Please ensure the server is running and the Hugging Face API is configured.");
+    }
+
     // Prepare factor data for scoring
     let factorData = scoringInput || userInput;
 
@@ -63,41 +69,32 @@ export async function generateAIAnalysis(
         analysis = analyzeVendorAccess(factorData);
     }
 
-    try {
-      // Call backend API for intelligent thinking steps
-      // Pass detectedFactors so API can tailor thinking to specific risk factors found
-      const aiThinkingSteps = await generateAIThinkingPoints(
-        caseId,
-        userInput,
-        parsedNLPResult.detectedFactors,
-      );
+    // Call backend API for intelligent thinking steps
+    // Pass detectedFactors so API can tailor thinking to specific risk factors found
+    const aiThinkingSteps = await generateAIThinkingPoints(
+      caseId,
+      userInput,
+      parsedNLPResult.detectedFactors,
+    );
 
-      // Call backend API for risk analysis using:
-      // - riskScore from rule-based engine
-      // - detectedFactors to provide context for AI reasoning
-      const aiAnalysis = await generateRiskAnalysisFromHF(
-        caseId,
-        userInput,
-        analysis.riskScore,
-        parsedNLPResult.detectedFactors,
-      );
+    // Call backend API for risk analysis using:
+    // - riskScore from rule-based engine
+    // - detectedFactors to provide context for AI reasoning
+    const aiAnalysis = await generateRiskAnalysisFromHF(
+      caseId,
+      userInput,
+      analysis.riskScore,
+      parsedNLPResult.detectedFactors,
+    );
 
-      // Only set thinkingSteps if API returns data - no fallback
-      if (aiThinkingSteps && aiThinkingSteps.length > 0) {
-        analysis.thinkingSteps = aiThinkingSteps;
-      } else {
-        // Don't set thinkingSteps - let component wait for API data
-        analysis.thinkingSteps = undefined;
-      }
+    // Set thinking steps from API
+    analysis.thinkingSteps = aiThinkingSteps;
 
-      if (aiAnalysis) {
-        analysis.aiSummary = aiAnalysis.summary;
-        analysis.aiMainConcern = aiAnalysis.mainConcern;
-        analysis.aiRecommendation = aiAnalysis.recommendation;
-      }
-    } catch (error) {
-      console.warn("AI enhancement failed:", error.message);
-      analysis.thinkingSteps = undefined;
+    // Set analysis fields from API
+    if (aiAnalysis) {
+      analysis.aiSummary = aiAnalysis.summary;
+      analysis.aiMainConcern = aiAnalysis.mainConcern;
+      analysis.aiRecommendation = aiAnalysis.recommendation;
     }
 
     // Save assessment
@@ -217,21 +214,25 @@ export async function generateAIThinkingPoints(
   userInput,
   detectedFactors,
 ) {
-  try {
-    const response = await fetch(`${API_URL}/api/smart-thinking`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ caseId, userInput, detectedFactors }),
-      signal: AbortSignal.timeout(10000),
-    });
+  const response = await fetch(`${API_URL}/api/smart-thinking`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caseId, userInput, detectedFactors }),
+    signal: AbortSignal.timeout(10000),
+  });
 
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.thinkingSteps;
-  } catch (error) {
-    console.warn("Could not generate thinking points:", error.message);
-    return null;
+  if (!response.ok) {
+    const errorData = await response.text();
+    throw new Error(
+      `Smart thinking API failed (${response.status}): ${errorData}`,
+    );
   }
+
+  const data = await response.json();
+  if (!data.thinkingSteps) {
+    throw new Error("Smart thinking API returned no thinkingSteps");
+  }
+  return data.thinkingSteps;
 }
 
 /**
@@ -253,20 +254,25 @@ async function generateRiskAnalysisFromHF(
   riskScore,
   detectedFactors,
 ) {
-  try {
-    const response = await fetch(`${API_URL}/api/risk-analysis`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ caseId, userInput, riskScore, detectedFactors }),
-      signal: AbortSignal.timeout(10000),
-    });
+  const response = await fetch(`${API_URL}/api/risk-analysis`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caseId, userInput, riskScore, detectedFactors }),
+    signal: AbortSignal.timeout(10000),
+  });
 
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (error) {
-    console.warn("Could not generate analysis:", error.message);
-    return null;
+  if (!response.ok) {
+    const errorData = await response.text();
+    throw new Error(
+      `Risk analysis API failed (${response.status}): ${errorData}`,
+    );
   }
+
+  const data = await response.json();
+  if (!data.summary || !data.mainConcern || !data.recommendation) {
+    throw new Error("Risk analysis API returned incomplete data");
+  }
+  return data;
 }
 
 /**

@@ -329,6 +329,7 @@ export function getRiskLevel(score) {
 /**
  * Analyze Vendor Access (Case 1)
  * Detects overbroad access and suggests Jump Host
+ * NOTE: aiSummary, aiMainConcern, aiRecommendation will be provided by HF API
  */
 export function analyzeVendorAccess(factors) {
   const riskData = scoreVendorAccess(factors);
@@ -338,17 +339,14 @@ export function analyzeVendorAccess(factors) {
   return {
     riskScore: riskData.score,
     riskLevel,
-    aiSummary: generateVendorSummary(riskData),
-    aiMainConcern: generateVendorConcern(riskData),
-    aiRecommendation: generateVendorRecommendation(riskData, factors),
     findings: riskData.findings,
-    artifacts: generateVendorArtifacts(riskData, factors),
   };
 }
 
 /**
  * Analyze Rule Cleanup (Case 2)
  * Prevents outage by detecting hidden dependencies
+ * NOTE: aiSummary, aiMainConcern, aiRecommendation will be provided by HF API
  */
 export function analyzeRuleCleanup(factors) {
   const riskData = scoreRuleCleanup(factors);
@@ -358,17 +356,14 @@ export function analyzeRuleCleanup(factors) {
   return {
     riskScore: riskData.score,
     riskLevel,
-    aiSummary: generateCleanupSummary(riskData),
-    aiMainConcern: generateCleanupConcern(riskData),
-    aiRecommendation: generateCleanupRecommendation(riskData, factors),
     findings: riskData.findings,
-    artifacts: generateCleanupArtifacts(riskData, factors),
   };
 }
 
 /**
  * Analyze Internet-Facing Service (Case 3)
  * Flags missing WAF for new internet-facing services
+ * NOTE: aiSummary, aiMainConcern, aiRecommendation will be provided by HF API
  */
 export function analyzeInternetFacing(factors) {
   const riskData = scoreInternetFacing(factors);
@@ -378,225 +373,8 @@ export function analyzeInternetFacing(factors) {
   return {
     riskScore: riskData.score,
     riskLevel,
-    aiSummary: generateExposureSummary(riskData),
-    aiMainConcern: generateExposureConcern(riskData),
-    aiRecommendation: generateExposureRecommendation(riskData, factors),
     findings: riskData.findings,
-    artifacts: generateExposureArtifacts(riskData, factors),
   };
 }
 
-// ============================================================================
-// VENDOR ACCESS SUMMARIES
-// ============================================================================
 
-function generateVendorSummary(riskData) {
-  const messages = {
-    CRITICAL:
-      "Vendor access requires immediate security review. Critical controls missing.",
-    HIGH: "Vendor access needs significant risk mitigation. Add jump host and time restrictions.",
-    MEDIUM:
-      "Vendor access has moderate security concerns. Strengthen controls.",
-    LOW: "Vendor access is well-controlled with appropriate security measures.",
-    INFO: "Vendor access is low-risk with strong security controls in place.",
-  };
-  return messages[riskData.level] || "Risk assessment completed.";
-}
-
-function generateVendorConcern(riskData) {
-  const messages = {
-    CRITICAL: "Unrestricted production access without jump host",
-    HIGH: "Missing critical security controls for vendor access",
-    MEDIUM: "Several security gaps in vendor access configuration",
-    LOW: "Minor security improvements possible",
-    INFO: "Vendor access is properly secured",
-  };
-  return messages[riskData.level] || "Review findings for details";
-}
-
-function generateVendorRecommendation(riskData, factors) {
-  const recs = [];
-  if (factors.hasJumpHost === "No") {
-    recs.push("✓ Implement jump host (bastion) for all vendor traffic");
-  }
-  if (!factors.timeWindow || factors.timeWindow.trim() === "") {
-    recs.push("✓ Set time-based access windows (e.g., business hours only)");
-  }
-  if (factors.auditLogging === "No") {
-    recs.push("✓ Enable audit logging for all vendor access");
-  }
-  if (isOverbroadAccess(factors.accessScope)) {
-    recs.push("✓ Restrict access to specific required servers/subnets");
-  }
-  return recs.length > 0
-    ? recs.join("\n")
-    : "✓ Current configuration is well-controlled";
-}
-
-function generateVendorArtifacts(riskData, factors) {
-  return {
-    ruleDiff: `
---- Current Configuration
-+++ Recommended Configuration
-+ rule allow_vendor_access {
-+   via-jumphost: jumphost.internal
-+   destination: "RESTRICTED_SERVERS"
-+   time-window: "business-hours"
-+   audit-logging: enabled
-+ }
-    `,
-    suggestedRules: [
-      "Jump Host for vendor access",
-      "Time-based access windows",
-      "Comprehensive audit logging",
-    ],
-  };
-}
-
-// ============================================================================
-// RULE CLEANUP SUMMARIES
-// ============================================================================
-
-function generateCleanupSummary(riskData) {
-  const messages = {
-    CRITICAL:
-      "Rule cleanup presents critical risk. Extensive testing required.",
-    HIGH: "Rule cleanup has significant risk factors. Comprehensive testing needed.",
-    MEDIUM: "Rule cleanup requires careful planning and monitoring.",
-    LOW: "Rule cleanup appears well-planned with appropriate safeguards.",
-    INFO: "Rule cleanup is low-risk with minimal dependencies identified.",
-  };
-  return messages[riskData.level] || "Risk assessment completed.";
-}
-
-function generateCleanupConcern(riskData) {
-  const messages = {
-    CRITICAL:
-      "Production rule cleanup without rollback plan or dependency mapping",
-    HIGH: "High-impact rule removal with hidden dependencies or legacy systems",
-    MEDIUM: "Rule cleanup requires careful dependency analysis",
-    LOW: "Rule cleanup appears safe to proceed",
-    INFO: "Rule cleanup is well-controlled",
-  };
-  return messages[riskData.level] || "Review findings for details";
-}
-
-function generateCleanupRecommendation(riskData, factors) {
-  const recs = [];
-  if (factors.hasRollbackPlan === "No") {
-    recs.push("✓ Create documented rollback procedure before changes");
-  }
-  if (factors.hasDependencies === "Yes") {
-    recs.push("✓ Identify and notify all systems with dependencies");
-  }
-  if (hasLegacyServices(factors.affectedSystems)) {
-    recs.push(
-      "✓ Extra caution with legacy systems - undocumented dependencies likely",
-    );
-  }
-  if (factors.environment === "Production") {
-    recs.push("✓ Use phased approach or maintenance window");
-  }
-  return recs.length > 0
-    ? recs.join("\n")
-    : "✓ Proceed with standard change process";
-}
-
-function generateCleanupArtifacts(riskData, factors) {
-  return {
-    testingPlan: `
-1. Pre-Change:
-   - Identify all dependent systems
-   - Document baseline performance metrics
-   - Prepare rollback procedure
-   
-2. Change:
-   - Remove rules in ${
-     factors.environment === "Production"
-       ? "maintenance window"
-       : "non-production"
-   }
-   - Monitor for 30 minutes
-   
-3. Validation:
-   - Verify all dependent systems operational
-   - Check performance metrics within normal range
-   - Review access logs for anomalies
-    `,
-    rollbackPlan: "Restore firewall rules from backup dated [DATE]",
-  };
-}
-
-// ============================================================================
-// INTERNET-FACING SUMMARIES
-// ============================================================================
-
-function generateExposureSummary(riskData) {
-  const messages = {
-    CRITICAL:
-      "Internet-facing service has critical security gaps. Implement protections immediately.",
-    HIGH: "Internet-facing service needs significant security enhancements.",
-    MEDIUM: "Internet-facing service has moderate security concerns.",
-    LOW: "Internet-facing service has appropriate security controls.",
-    INFO: "Internet-facing service is properly secured.",
-  };
-  return messages[riskData.level] || "Risk assessment completed.";
-}
-
-function generateExposureConcern(riskData) {
-  const messages = {
-    CRITICAL: "Service exposed to internet without basic protections (no WAF)",
-    HIGH: "Multiple critical security controls missing",
-    MEDIUM: "Some security protections in place",
-    LOW: "Strong security posture for internet-facing service",
-    INFO: "Service is well-protected",
-  };
-  return messages[riskData.level] || "Review findings for details";
-}
-
-function generateExposureRecommendation(riskData, factors) {
-  const recs = [];
-  if (factors.hasWAF === "No") {
-    recs.push(
-      "✓ Enable WAF immediately - critical for internet-facing services",
-    );
-  }
-  if (hasWeakTLS(factors.sslVersion)) {
-    recs.push("✓ Enforce TLS 1.3 and redirect HTTP to HTTPS");
-  }
-  if (factors.hasDDoSProtection === "No") {
-    recs.push("✓ Enable DDoS protection (CDN, cloud service, etc.)");
-  }
-  if (factors.rateLimiting === "No") {
-    recs.push("✓ Implement rate limiting on all endpoints");
-  }
-  return recs.length > 0 ? recs.join("\n") : "✓ Service is well-protected";
-}
-
-function generateExposureArtifacts(riskData, factors) {
-  return {
-    securityPolicy: `
-Internet-Facing Service Security Policy:
-
-1. Network Protection:
-   - WAF ${factors.hasWAF === "Yes" ? "✓ Enabled" : "✗ MISSING"}
-   - DDoS Protection ${
-     factors.hasDDoSProtection === "Yes" ? "✓ Enabled" : "✗ MISSING"
-   }
-   
-2. Encryption:
-   - TLS 1.3 ${
-     !hasWeakTLS(factors.sslVersion) ? "✓ Enforced" : "✗ Weak or Missing"
-   }
-   - HTTPS Only ${!hasWeakTLS(factors.sslVersion) ? "✓ Yes" : "✗ Mixed"}
-   
-3. Rate Limiting:
-   - Rate Limiting ${factors.rateLimiting === "Yes" ? "✓ Enabled" : "✗ MISSING"}
-    `,
-    protectionRules: [
-      "WAF rules for OWASP Top 10",
-      "DDoS thresholds and rate limits",
-      "TLS certificate pinning",
-    ],
-  };
-}
