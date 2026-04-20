@@ -2,6 +2,93 @@
  * Centralized prompt templates for all use cases
  */
 
+export function getNLPParsingPrompt(userInput, caseId = 1) {
+  const baseStructure = `{
+  "keywords": ["keyword1", "keyword2", ...],
+  "detectedFactors": {
+    "isProduction": boolean,
+    "scopeIsOverbroad": boolean,
+    "hasTimeBasedRestrictions": boolean,
+    "hasJumpHost": boolean,
+    "hasDependencies": boolean,
+    "securityLevel": string ("low" or "high"),
+    "isInternetFacing": boolean,
+    "hasProtection": boolean
+  },
+  "confidence": number (0-100),
+  "entities": {
+    "environment": string or null,
+    "devices": [string],
+    "services": [string],
+    "users": [string]
+  }
+}`;
+
+  const prompts = {
+    1: `You are an expert firewall security analyst. Analyze a VENDOR ACCESS REQUEST.
+Extract risk factors from the user input.
+
+Return a JSON object with this EXACT structure (no other text):
+${baseStructure}
+
+User input: "${userInput || "No details provided"}"
+
+For VENDOR ACCESS, specifically analyze:
+- Environment: Is the vendor accessing production systems?
+- Scope: Is the access scope too broad (CIDR /8-/16, multiple ports, excessive services)?
+- Restrictions: Are there time-based windows or IP restrictions?
+- Jump Host: Is access properly going through a bastion/jump host?
+- Dependencies: Will this vendor access affect other systems?
+- Security: What security protocols (TLS, VPN, encryption) are in place?
+- Internet Exposure: Is the access from external/internet sources?
+- Protection: Are there audit logging, MFA, or monitoring controls?
+
+Return ONLY valid JSON. No explanations.`,
+
+    2: `You are an expert firewall security analyst. Analyze a RULE CLEANUP REQUEST.
+Extract risk factors from the user input.
+
+Return a JSON object with this EXACT structure (no other text):
+${baseStructure}
+
+User input: "${userInput || "No details provided"}"
+
+For RULE CLEANUP, specifically analyze:
+- Environment: Are production systems affected by these rules?
+- Scope: How many systems/services would be affected by removing these rules?
+- Restrictions: Are there any safeguards (testing windows, gradual rollout)?
+- Jump Host: Would removing rules affect critical infrastructure or bastion hosts?
+- Dependencies: Are there hidden dependencies on these rules?
+- Security: Would removal degrade security posture or expose systems?
+- Internet Exposure: Would rule removal expose internal services to internet?
+- Protection: Is there a rollback plan, testing strategy, or impact assessment?
+
+Return ONLY valid JSON. No explanations.`,
+
+    3: `You are an expert firewall security analyst. Analyze an INTERNET-FACING SERVICE deployment.
+Extract risk factors from the user input.
+
+Return a JSON object with this EXACT structure (no other text):
+${baseStructure}
+
+User input: "${userInput || "No details provided"}"
+
+For INTERNET-FACING SERVICE, specifically analyze:
+- Environment: Is this service targeting production users?
+- Scope: How broad is the expected traffic/user scope?
+- Restrictions: Are there rate limiting or request throttling mechanisms?
+- Jump Host: Is traffic proxied through CDN/WAF/protective layer?
+- Dependencies: What backend systems does this service depend on?
+- Security: What encryption (TLS version), authentication, and data protection?
+- Internet Exposure: Is the service directly exposed to internet or protected?
+- Protection: Are there DDoS protection, WAF, IPS/IDS, or other shields?
+
+Return ONLY valid JSON. No explanations.`,
+  };
+
+  return prompts[caseId] || prompts[1];
+}
+
 export function getThinkingPrompt(caseId, userInput, detectedFactors) {
   const prompts = {
     1: `You are a firewall security expert analyzing a vendor access request. 

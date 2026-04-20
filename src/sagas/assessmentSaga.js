@@ -17,8 +17,9 @@ function* fetchAnalysisSaga(action) {
     const { caseId, userInput, formData } = action.payload;
 
     // STEP 1: Parse user input ONCE to extract keywords, confidence, and detected factors
+    // Pass caseId to get scenario-specific NLP parsing
     // Returned object structure: { confidence, keywords, detectedFactors, rawInput, entities }
-    const parsedNLPResult = yield call(parseNLInput, userInput);
+    const parsedNLPResult = yield call(parseNLInput, userInput, caseId);
 
     // STEP 2: Dispatch confidence and keywords to Redux (used by StreamingAnalysis)
     yield put(

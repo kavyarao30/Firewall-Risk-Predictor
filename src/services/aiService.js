@@ -33,10 +33,10 @@ export async function generateAIAnalysis(
 ) {
   try {
     // Check if backend AI service is available before analysis
-    const backendAvailable = await isBackendAvailable();
-    if (!backendAvailable) {
-      throw new Error("AI backend service is not available. Please ensure the server is running and the Hugging Face API is configured.");
-    }
+    // const backendAvailable = await isBackendAvailable();
+    // if (!backendAvailable) {
+    //   throw new Error("AI backend service is not available. Please ensure the server is running and the Hugging Face API is configured.");
+    // }
 
     // Prepare factor data for scoring
     let factorData = scoringInput || userInput;

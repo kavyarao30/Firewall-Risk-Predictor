@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { AIAnalyzer } from "./analyzer.js";
+import { getNLPParsingPrompt } from "./prompts.js";
 
 dotenv.config({ path: ".env.server" });
 
@@ -17,6 +18,64 @@ app.use(express.json());
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", api_configured: !!HF_API_KEY });
+});
+
+// Parse user input using HF API
+app.post("/api/parse-input", async (req, res) => {
+  try {
+    if (!analyzer) {
+      return res
+        .status(400)
+        .json({ error: "Hugging Face API key not configured" });
+    }
+
+    const { userInput, caseId = 1 } = req.body;
+    if (!userInput)
+      return res.status(400).json({ error: "userInput field is required" });
+
+    const prompt = getNLPParsingPrompt(userInput, caseId);
+
+    // Call HF API to parse the input
+    const response = await analyzer.client.chatCompletion({
+      model: "meta-llama/Meta-Llama-3-8B-Instruct",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a firewall security expert. Return valid JSON only.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 500,
+      temperature: 0.7,
+    });
+
+    const content = response.choices?.[0]?.message?.content || "";
+
+    // Parse JSON response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("HF API did not return valid JSON for NLP parsing");
+    }
+
+    const parsedResult = JSON.parse(jsonMatch[0]);
+
+    // Validate required fields
+    if (
+      !parsedResult.detectedFactors ||
+      typeof parsedResult.confidence !== "number"
+    ) {
+      throw new Error("NLP response missing required fields");
+    }
+
+    res.json(parsedResult);
+  } catch (error) {
+    console.error("Error in /api/parse-input:", error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Generate thinking steps

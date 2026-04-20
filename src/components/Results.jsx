@@ -172,7 +172,7 @@ export default function Results({ caseId, onDone }) {
                       className="score-contribution"
                       style={{ color: Object.values(RISK_LEVELS).find(r => r.label === finding.type)?.color }}
                     >
-                      +{finding.riskContribution || 5}
+                      {(finding.riskContribution || 5) >= 0 ? '+' : ''}{finding.riskContribution || 5}
                     </span>
                   </div>
                 ))}
